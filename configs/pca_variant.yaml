@@ -1,0 +1,59 @@
+# Corrected pipeline, PCA variant (Final notebook, cells 15-36).
+# Hyperparameters are the ones in the original notebooks unless marked CHANGED;
+# every change is explained in docs/REPRODUCTION_AUDIT.md.
+name: pca_variant
+description: >
+  Leakage-free reconstruction of the earlier "Final" notebook: PCA(100)
+  instead of LASSO for CNV/mutation/RPPA and SMOTE sampling_strategy="auto"
+  for every modality. RF meta-classifier on out-of-fold probabilities; all
+  preprocessing is fitted inside training folds only.
+
+data:
+  label_column: metastasis_status
+  id_columns: [patient_id, sample_id, barcode, bcr_patient_barcode]
+  prefixes: {rs: rs_, cn: cn_, mu: mu_, pp: pp_}
+  expected: {n_samples: 220, n_positive: 33, n_negative: 187, cn: 813, rs: 401, mu: 126, pp: 218}
+
+split:
+  test_size: 0.2          # original: train_test_split(test_size=0.2, random_state=42)
+  seed: 42
+  outer_cv_folds: 5       # original stacking cell: StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+  stacking_cv_folds: 5
+
+modalities:
+  rs:
+    reducer: autoencoder
+    impute: median        # ADDED: in-fold imputation (original assumed no NaNs)
+    smote: {enabled: true, sampling_strategy: auto, k_neighbors: 5, random_state: 42}   # Final nb
+    autoencoder:
+      hidden_units: 64
+      latent_units: 32
+      epochs: 50
+      batch_size: 32
+      noise_stddev: 0.5   # CHANGED from 50 (applied twice in original); see audit
+      learning_rate: 0.001  # Keras Adam default, as in original
+      seed: 39            # no seed set in Final nb; 39 from LASSO nb
+    forest: {n_estimators: 100, random_state: 42}   # original: RandomForestClassifier(random_state=42) -> 100 trees
+  cn:
+    reducer: pca
+    impute: median
+    smote: {enabled: true, sampling_strategy: auto, k_neighbors: 5, random_state: 42}   # Final nb
+    pca: {n_components: 100, random_state: 42}   # Final nb: PCA(n_components=100, random_state=42)
+    forest: {n_estimators: 100, random_state: 42}
+  mu:
+    reducer: pca
+    impute: median
+    smote: {enabled: true, sampling_strategy: auto, k_neighbors: 5, random_state: 42}  # Final nb
+    pca: {n_components: 100, random_state: 42}   # Final nb: PCA(n_components=100, random_state=42)
+    forest: {n_estimators: 100, random_state: 42}
+  pp:
+    reducer: pca
+    impute: median
+    smote: {enabled: true, sampling_strategy: auto, k_neighbors: 5, random_state: 42}   # Final nb
+    pca: {n_components: 100, random_state: 42}   # Final nb: PCA(n_components=100, random_state=42)
+    forest: {n_estimators: 100, random_state: 42}
+
+stacking:
+  meta_features: proba    # CHANGED from hard labels (original) to positive-class probabilities
+  forest: {n_estimators: 100, random_state: 42}   # original final_estimator
+  threshold: 0.5

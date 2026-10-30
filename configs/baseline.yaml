@@ -1,0 +1,59 @@
+# Corrected default pipeline (LASSO-notebook variant).
+# Hyperparameters are the ones in the original notebooks unless marked CHANGED;
+# every change is explained in docs/REPRODUCTION_AUDIT.md.
+name: baseline
+description: >
+  Leakage-free reconstruction of the LASSO notebook: RNA-seq denoising
+  autoencoder + RF, LASSO-selected CNV/mutation/RPPA RFs, RF meta-classifier
+  on out-of-fold probabilities. SMOTE, imputation, scaling, LASSO and the
+  autoencoder are fitted inside training folds only.
+
+data:
+  label_column: metastasis_status
+  id_columns: [patient_id, sample_id, barcode, bcr_patient_barcode]
+  prefixes: {rs: rs_, cn: cn_, mu: mu_, pp: pp_}
+  expected: {n_samples: 220, n_positive: 33, n_negative: 187, cn: 813, rs: 401, mu: 126, pp: 218}
+
+split:
+  test_size: 0.2          # original: train_test_split(test_size=0.2, random_state=42)
+  seed: 42
+  outer_cv_folds: 5       # original stacking cell: StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+  stacking_cv_folds: 5
+
+modalities:
+  rs:
+    reducer: autoencoder
+    impute: median        # ADDED: in-fold imputation (original assumed no NaNs)
+    smote: {enabled: true, sampling_strategy: 0.6, k_neighbors: 5, random_state: 42}   # LASSO nb cell 16
+    autoencoder:
+      hidden_units: 64
+      latent_units: 32
+      epochs: 50
+      batch_size: 32
+      noise_stddev: 0.5   # CHANGED from 50 (applied twice in original); see audit
+      learning_rate: 0.001  # Keras Adam default, as in original
+      seed: 39            # LASSO nb: random.seed/np.random.seed/tf.random.set_seed(39)
+    forest: {n_estimators: 100, random_state: 42}   # original: RandomForestClassifier(random_state=42) -> 100 trees
+  cn:
+    reducer: lasso
+    impute: median
+    smote: {enabled: true, sampling_strategy: 0.6, k_neighbors: 5, random_state: 42}   # LASSO nb cell 24
+    lasso: {cv: 5, max_iter: 10000, random_state: 42, on_empty: all}
+    forest: {n_estimators: 100, random_state: 42}
+  mu:
+    reducer: lasso
+    impute: median
+    smote: {enabled: true, sampling_strategy: auto, k_neighbors: 5, random_state: 42}  # LASSO nb cell 29
+    lasso: {cv: 5, max_iter: 10000, random_state: 42, on_empty: all}
+    forest: {n_estimators: 100, random_state: 42}
+  pp:
+    reducer: lasso
+    impute: median
+    smote: {enabled: true, sampling_strategy: 0.3, k_neighbors: 5, random_state: 42}   # LASSO nb cell 34
+    lasso: {cv: 5, max_iter: 10000, random_state: 42, on_empty: all}
+    forest: {n_estimators: 100, random_state: 42}
+
+stacking:
+  meta_features: proba    # CHANGED from hard labels (original) to positive-class probabilities
+  forest: {n_estimators: 100, random_state: 42}   # original final_estimator
+  threshold: 0.5
