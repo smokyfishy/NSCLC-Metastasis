@@ -3,7 +3,7 @@
 A clean, tested reconstruction of my 2023–2024 research project that predicts
 metastatic status in non-small-cell lung cancer (TCGA LUAD + LUSC) by fusing
 four molecular data types. I originally built it as a set of Google Colab
-notebooks. This repository turns those notebooks into an installable Python
+notebooks. This repository is a transformation of those notebooks into an installable Python
 package, keeps the original architecture, and **corrects the data-leakage and
 evaluation errors in the original analysis**.
 
